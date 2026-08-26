@@ -1,0 +1,6 @@
+{
+  "observability_token_hash": "321d13677edfa0c6ac2e60e73d6542c104ba3daf2cbb12ce271c176b777778be",
+  "tls_cert_path": "certs/localhost.crt",
+  "tls_key_path": "certs/localhost.key",
+  "observability_port": 8766
+}
