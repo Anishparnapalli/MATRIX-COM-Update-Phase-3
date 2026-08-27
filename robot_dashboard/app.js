@@ -1481,34 +1481,36 @@ function requestEmergencyReset(){
   toast('Reset requested — waiting for QNX to confirm safe recovery…');
 }
 
-// Reflects the current emergency/lock state into the safety-lock banner
-// and its action button. Called whenever S.emergency actually changes
-// (see updateUI()) and right after a reset request is sent.
+// Reflects the current emergency/lock state into the safety-lock panel
+// (now anchored directly below the main EMERGENCY STOP alert inside
+// #emerg-overlay — see index.html) and its action button. Called
+// whenever S.emergency actually changes (see updateUI()) and right
+// after a reset request is sent. The panel's own visibility is driven
+// entirely by #emerg-overlay's 'show' class (toggled in loop() from
+// S.emergency), so this function only needs to keep its *contents*
+// (status text + button label/disabled state) correct — no separate
+// show/hide bookkeeping needed here.
 function _updateSafetyLockUI(){
-  const banner = document.getElementById('safety-lock-banner');
   const btn = document.getElementById('btn-safety-action');
   const statusEl = document.getElementById('safety-lock-status');
-  if(!banner || !btn || !statusEl) return;
+  if(!btn || !statusEl) return;
 
   if(!S.emergency){
-    banner.style.display = 'none';
     return;
   }
 
-  banner.style.display = 'flex';
-
   if(_emergencyNeedsQnxReset()){
     if(S._resetPending){
-      statusEl.textContent = '🔒 SAFETY LOCKED — reset sent, awaiting QNX confirmation…';
+      statusEl.textContent = 'Reset sent — awaiting QNX confirmation…';
       btn.textContent = '⏳ WAITING FOR QNX…';
       btn.disabled = true;
     } else {
-      statusEl.textContent = '🔒 SAFETY LOCKED — QNX motion blocked until reset is confirmed';
+      statusEl.textContent = 'QNX reset required';
       btn.textContent = '🔓 RESET EMERGENCY';
       btn.disabled = false;
     }
   } else {
-    statusEl.textContent = '🔒 EMERGENCY ACTIVE — local simulation halted';
+    statusEl.textContent = 'Local simulation halted — no QNX handshake needed';
     btn.textContent = '✔ CLEAR';
     btn.disabled = false;
   }
