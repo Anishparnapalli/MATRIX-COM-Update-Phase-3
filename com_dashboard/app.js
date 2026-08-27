@@ -17,6 +17,8 @@ let packets = [];          // ALL envelopes, newest first (unfiltered — Card 2
 let selectedPacketId = null;
 let paused = false;
 let currentDetailCard = null;   // null | 'card1' | 'card2' | 'card3'
+let c1ActiveFilter = 'all';     // ALL | COMMANDS | SEQUENCES | SAFETY | MODE
+let c3ActiveFilter = 'all';     // ALL | TELEMETRY | POSE | CYCLE | SAFETY | SYSTEM
 
 const stats = {
   total: 0,
@@ -29,9 +31,10 @@ let pendingCommand = null;
 const timelineEntries = [];
 
 // Card-specific running counters/latest-state
-const card1 = { count: 0, mode: 'MANUAL' };
+const card1 = { count: 0, mode: 'MANUAL', cmdCount: 0, seqCount: 0, poseCount: 0 };
 const card2 = { total: 0, errors: 0 };
-const card3 = { motionState: 'IDLE', poseIdx: null, totalPoses: null, lastAngles: null };
+const card3 = { motionState: 'IDLE', poseIdx: null, totalPoses: null, lastAngles: null,
+                cycleNum: null, safety: 'ARMED', lastTelemetryAt: null, telemetryTimestamps: [] };
 
 // Topology: connection state is REAL (from explicit status events, never
 // inferred from traffic — Item 1). Activity is a separate, short-lived
@@ -215,12 +218,40 @@ function updateCard1(env){
   if(env.direction !== 'browser_to_bridge') return;
   const p = env.payload || {};
   card1.count++;
+
+  // Level-1/level-2 breakdown (redesign §3/§8): sequences vs plain
+  // commands vs mode changes, all from real envelope categories/types.
+  if(env.category === 'sequence' && (p.type === 'rtos_sequence' || p.type === 'send_sequence')){
+    card1.seqCount++;
+    card1.poseCount += (p.total_poses || (p.sequence ? p.sequence.length : 0)) || 0;
+    renderCard1PosePreview(p);
+  } else {
+    card1.cmdCount++;
+  }
   if(p.type === 'set_mode' && p.mode) card1.mode = p.mode.toUpperCase();
 
   document.getElementById('c1-latest').textContent = describe(env);
   document.getElementById('c1-latest-time').textContent = new Date().toLocaleTimeString('en-GB',{hour12:false});
   document.getElementById('c1-mode').textContent = card1.mode;
   document.getElementById('c1-count').textContent = card1.count;
+  document.getElementById('c1-cmd-count').textContent = card1.cmdCount;
+  document.getElementById('c1-seq-count').textContent = card1.seqCount;
+  document.getElementById('c1-pose-count').textContent = card1.poseCount;
+}
+
+// Compact pose-preview strip (redesign §4 Level-2 / §5) — shows only the
+// FIRST joint's angle per pose as a quick "shape" preview, never the
+// full raw payload. Built only from the real sequence just transmitted.
+function renderCard1PosePreview(p){
+  const wrap = document.getElementById('c1-pose-preview');
+  if(!wrap) return;
+  const seq = p.sequence;
+  if(!Array.isArray(seq) || seq.length === 0){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = seq.map((pose, i) => {
+    const j0 = Array.isArray(pose) && pose.length ? pose[0] : null;
+    return `<div class="pose-chip"><span class="pose-chip-lbl">P${i+1}</span><span class="pose-chip-val">${j0!=null ? j0.toFixed(0)+'°' : '—'}</span></div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -277,25 +308,49 @@ function updateCard3(env){
   if(p.type === 'angles' && Array.isArray(p.angles)){
     card3.lastAngles = p.angles;
     driveArm(p.angles);
+    _trackTelemetryRate();
+    _updateLastTelemetryTime();
     // Continuous telemetry updates values IN PLACE but must never push
     // the "latest event" text (below) away from a real discrete event.
     return;
   }
 
+  _updateLastTelemetryTime();
+
   // ── Discrete, meaningful events only — these DO update "latest event" ──
   document.getElementById('c3-latest').textContent = describe(env);
 
-  if(p.type === 'pose_advance'){ card3.poseIdx = p.pose_idx; }
-  if(p.type === 'cycle_done'){ /* informational only */ }
-  if(p.type === 'emergency'){ card3.motionState = 'LOCKED'; }
-  if(p.type === 'emergency_cleared'){ card3.motionState = 'IDLE'; }
+  if(p.type === 'pose_advance'){ card3.poseIdx = p.pose_idx; card3.motionState='CYCLING'; }
+  if(p.type === 'cycle_done'){ card3.cycleNum = p.cycle_num; }
+  if(p.type === 'emergency'){ card3.motionState = 'LOCKED'; card3.safety = 'TRIPPED'; }
+  if(p.type === 'emergency_cleared'){ card3.motionState = 'IDLE'; card3.safety = 'ARMED'; }
   if(p.type === 'seq_complete'){ card3.motionState = 'IDLE'; card3.poseIdx = null; }
 
-  document.getElementById('c3-motion').textContent = card3.motionState;
-  document.getElementById('c3-motion').style.color =
-    card3.motionState==='LOCKED' ? 'var(--red)' : card3.motionState==='CYCLING' ? 'var(--amber)' : 'var(--green)';
+  renderCard3State();
+}
+
+function renderCard3State(){
+  const motionEl = document.getElementById('c3-motion');
+  motionEl.textContent = card3.motionState;
+  motionEl.className = 'c3-state-val ' +
+    (card3.motionState==='LOCKED' ? 'bad' : card3.motionState==='CYCLING' ? 'warn' : 'ok');
+
   document.getElementById('c3-pose').textContent =
     (card3.poseIdx!=null && card3.totalPoses) ? `${card3.poseIdx}/${card3.totalPoses}` : (card3.poseIdx!=null ? String(card3.poseIdx) : '—');
+
+  document.getElementById('c3-cycle').textContent = card3.cycleNum!=null ? `#${card3.cycleNum}` : '—';
+
+  const safetyEl = document.getElementById('c3-safety');
+  safetyEl.textContent = card3.safety;
+  safetyEl.className = 'c3-state-val ' + (card3.safety === 'TRIPPED' ? 'bad' : 'ok');
+
+  // TCP link state mirrors the real qnx_connected system_status, not an
+  // inference from telemetry timing.
+  const tcpEl = document.getElementById('c3-tcp');
+  if(tcpEl){
+    tcpEl.textContent = topo.qnxOnline === true ? 'CONNECTED' : topo.qnxOnline === false ? 'DISCONNECTED' : '—';
+    tcpEl.className = 'c3-state-val ' + (topo.qnxOnline === true ? 'ok' : topo.qnxOnline === false ? 'bad' : '');
+  }
 }
 
 // A dispatched sequence (Card 1 direction, but Card 3 needs to know the
@@ -305,13 +360,38 @@ function _observeSequenceForCard3(env){
   if(p.type === 'rtos_sequence' || p.type === 'send_sequence'){
     card3.totalPoses = p.total_poses || (p.sequence ? p.sequence.length : null);
     card3.motionState = 'CYCLING';
-    const el = document.getElementById('c3-motion');
-    if(el){ el.textContent = 'CYCLING'; el.style.color = 'var(--amber)'; }
+    renderCard3State();
   }
+}
+
+// Telemetry rate (redesign §26 "TELEMETRY RATE") — computed client-side
+// from the real inter-arrival times of genuine qnx_to_bridge angle
+// envelopes. Never a fabricated/fixed number; reads "—" until enough
+// real samples exist.
+function _trackTelemetryRate(){
+  const now = performance.now();
+  card3.telemetryTimestamps.push(now);
+  const cutoff = now - 3000;
+  while(card3.telemetryTimestamps.length && card3.telemetryTimestamps[0] < cutoff) card3.telemetryTimestamps.shift();
+  const rateEl = document.getElementById('c3-rate');
+  if(rateEl){
+    if(card3.telemetryTimestamps.length >= 2){
+      const hz = card3.telemetryTimestamps.length / 3;
+      rateEl.textContent = hz.toFixed(1) + ' Hz';
+    } else {
+      rateEl.textContent = '—';
+    }
+  }
+}
+function _updateLastTelemetryTime(){
+  card3.lastTelemetryAt = new Date();
+  const el = document.getElementById('c3-latest-time');
+  if(el) el.textContent = 'Last telemetry: ' + card3.lastTelemetryAt.toLocaleTimeString('en-GB',{hour12:false});
 }
 
 function driveArm(angles){
   const ids = ['arm-j0','arm-j1','arm-j2','arm-j3','arm-j4'];
+  const prev = card3._prevAngles || [];
   for(let i=0;i<5;i++){
     const g = document.getElementById(ids[i]);
     if(g && angles[i]!=null){
@@ -323,12 +403,28 @@ function driveArm(angles){
     }
   }
   const labels = ['jr-j0','jr-j1','jr-j2','jr-j3','jr-j4'];
+  const moveIds = ['jr-move-j0','jr-move-j1','jr-move-j2','jr-move-j3','jr-move-j4'];
   for(let i=0;i<5;i++){
     const el = document.getElementById(labels[i]);
     if(el && angles[i]!=null){ el.textContent = angles[i].toFixed(1)+'°'; el.classList.add('live'); }
+    const moveEl = document.getElementById(moveIds[i]);
+    if(moveEl && angles[i]!=null && prev[i]!=null){
+      const d = angles[i] - prev[i];
+      if(Math.abs(d) < 0.15){ moveEl.textContent = '●'; moveEl.className = 'jr-move'; }
+      else if(d > 0){ moveEl.textContent = '↑'; moveEl.className = 'jr-move up'; }
+      else { moveEl.textContent = '↓'; moveEl.className = 'jr-move down'; }
+    }
   }
   const grip = document.getElementById('jr-grip');
   if(grip && angles[5]!=null){ grip.textContent = Math.round(angles[5])+'%'; grip.classList.add('live'); }
+  const gripMove = document.getElementById('jr-move-j5');
+  if(gripMove && angles[5]!=null && prev[5]!=null){
+    const d = angles[5]-prev[5];
+    if(Math.abs(d) < 0.5){ gripMove.textContent='●'; gripMove.className='jr-move'; }
+    else if(d>0){ gripMove.textContent='↑'; gripMove.className='jr-move up'; }
+    else { gripMove.textContent='↓'; gripMove.className='jr-move down'; }
+  }
+  card3._prevAngles = angles.slice();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -426,16 +522,35 @@ function describe(env){
 //  DETAIL VIEW (Item 3: click-to-expand per card)
 // ═══════════════════════════════════════════════════════════════════
 const CARD_TITLES = {
-  card1: 'ROBOTIC DASHBOARD → BRIDGE — full stream',
-  card2: 'GATEWAY PROCESSING INSPECTOR — every packet, both directions',
-  card3: 'QNX → BRIDGE — full stream',
+  card1: 'ROBOTIC DASHBOARD → BRIDGE — Transmission Inspector',
+  card2: 'GATEWAY PROCESSING TRACE — every packet, both directions',
+  card3: 'QNX → BRIDGE — Telemetry & Event Monitor',
 };
+
+// Card 1 filter tabs (redesign §5/§6): ALL / COMMANDS / SEQUENCES / SAFETY / MODE
+const C1_FILTERS = [
+  { id: 'all', label: 'ALL' },
+  { id: 'commands', label: 'COMMANDS' },
+  { id: 'sequences', label: 'SEQUENCES' },
+  { id: 'safety', label: 'SAFETY' },
+  { id: 'mode', label: 'MODE' },
+];
+// Card 3 filter tabs (redesign §30): ALL / TELEMETRY / POSE / CYCLE / SAFETY / SYSTEM
+const C3_FILTERS = [
+  { id: 'all', label: 'ALL' },
+  { id: 'telemetry', label: 'TELEMETRY' },
+  { id: 'pose', label: 'POSE' },
+  { id: 'cycle', label: 'CYCLE' },
+  { id: 'safety', label: 'SAFETY' },
+  { id: 'system', label: 'SYSTEM' },
+];
 
 function openDetail(cardId){
   currentDetailCard = cardId;
   document.getElementById('cards-view').style.display = 'none';
   document.getElementById('detail-view').style.display = 'flex';
   document.getElementById('detail-title').textContent = CARD_TITLES[cardId];
+  renderDetailSubfilters();
   renderPacketList(false);
 }
 function closeDetail(){
@@ -444,9 +559,50 @@ function closeDetail(){
   document.getElementById('cards-view').style.display = 'grid';
 }
 
+function renderDetailSubfilters(){
+  const wrap = document.getElementById('detail-subfilters');
+  if(!wrap) return;
+  if(currentDetailCard === 'card1'){
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div class="c1-filter-row">${C1_FILTERS.map(f =>
+      `<button class="c1-filter-btn${f.id===c1ActiveFilter?' active':''}" onclick="setC1Filter('${f.id}')">${f.label}</button>`
+    ).join('')}</div>`;
+  } else if(currentDetailCard === 'card3'){
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div class="c3-filter-row">${C3_FILTERS.map(f =>
+      `<button class="c1-filter-btn${f.id===c3ActiveFilter?' active':''}" onclick="setC3Filter('${f.id}')">${f.label}</button>`
+    ).join('')}</div>`;
+  } else {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+  }
+}
+function setC1Filter(id){ c1ActiveFilter = id; renderDetailSubfilters(); renderPacketList(false); }
+function setC3Filter(id){ c3ActiveFilter = id; renderDetailSubfilters(); renderPacketList(false); }
+
+function _matchesC1Filter(env){
+  if(c1ActiveFilter === 'all') return true;
+  const p = env.payload || {};
+  if(c1ActiveFilter === 'sequences') return env.category === 'sequence';
+  if(c1ActiveFilter === 'safety') return env.category === 'emergency';
+  if(c1ActiveFilter === 'mode') return p.type === 'set_mode';
+  if(c1ActiveFilter === 'commands') return env.category === 'command';
+  return true;
+}
+function _matchesC3Filter(env){
+  if(c3ActiveFilter === 'all') return true;
+  const p = env.payload || {};
+  if(c3ActiveFilter === 'telemetry') return p.type === 'angles';
+  if(c3ActiveFilter === 'pose') return p.type === 'pose_advance';
+  if(c3ActiveFilter === 'cycle') return p.type === 'cycle_done' || p.type === 'seq_complete';
+  if(c3ActiveFilter === 'safety') return env.category === 'emergency';
+  if(c3ActiveFilter === 'system') return env.category === 'system_status' || p.type === 'watchdog';
+  return true;
+}
+
 function _packetsForCurrentDetail(){
-  if(currentDetailCard === 'card1') return packets.filter(p=>p.direction==='browser_to_bridge');
-  if(currentDetailCard === 'card3') return packets.filter(p=>p.direction==='qnx_to_bridge');
+  if(currentDetailCard === 'card1') return packets.filter(p=>p.direction==='browser_to_bridge').filter(_matchesC1Filter);
+  if(currentDetailCard === 'card3') return packets.filter(p=>p.direction==='qnx_to_bridge').filter(_matchesC3Filter);
   return packets; // card2 = everything
 }
 
@@ -550,6 +706,9 @@ function renderTopology(){
 
   document.getElementById('link-qnx-gw').classList.toggle('live', sQnx==='on' && sGw==='on');
   document.getElementById('link-gw-br').classList.toggle('live', sGw==='on' && sBr==='on');
+
+  // Card 3's TCP-link readout mirrors the same real connection state.
+  renderCard3State();
 }
 setInterval(renderTopology, 800);
 
@@ -583,8 +742,54 @@ function renderTimeline(){
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  TEST LAB (Item 5: redesigned + live-synced)
+//  TEST LAB (Other-Problems §2/§3: redesigned Fault Injection & Experiment
+//  Console + compact main-dashboard status widget)
 // ═══════════════════════════════════════════════════════════════════
+
+// Client-tracked state for what the *last known real* fault status was,
+// used only to (a) detect start/stop transitions for the history list
+// and (b) know when a fault genuinely started so we can compute elapsed
+// time for the progress bar. All of this derives from real
+// `test_lab_status` messages — nothing here is fabricated traffic.
+const testLab = {
+  lastActive: false,
+  lastMode: null,
+  lastRate: null,
+  lastDurationS: null,
+  activeStartedAt: null,   // Date, set when active transitions false->true
+  lastKnownRemaining: null,
+  history: [],             // bounded list of {mode, rate, durationS, startedAt, endedAt, status}
+};
+const TESTLAB_HISTORY_MAX = 12;
+
+// Per fault type, the backend's "rate" field means something different
+// (see fault_layer usage in bridge.py: packet_loss/corrupt = probability
+// 0..1 shown here as %, delay = seconds). Only the three modes actually
+// wired in bridge.py's Test Lab command handler are offered.
+const FAULT_TYPE_META = {
+  packet_loss: { label: 'DROP RATE (%)', toBackendRate: v => Math.min(1, Math.max(0, v/100)), defaultUi: 25 },
+  delay:       { label: 'DELAY (ms)',    toBackendRate: v => Math.min(3000, Math.max(0, v))/1000, defaultUi: 400 },
+  corrupt:     { label: 'CORRUPT RATE (%)', toBackendRate: v => Math.min(1, Math.max(0, v/100)), defaultUi: 30 },
+};
+
+function tlOnFaultTypeChange(){
+  const type = document.getElementById('tl-fault-type').value;
+  const meta = FAULT_TYPE_META[type];
+  const rateLbl = document.getElementById('tl-rate-label');
+  const rateInp = document.getElementById('tl-fault-rate');
+  if(rateLbl) rateLbl.textContent = meta.label;
+  if(rateInp) rateInp.value = meta.defaultUi;
+}
+
+function tlArmFault(){
+  const type = document.getElementById('tl-fault-type').value;
+  const meta = FAULT_TYPE_META[type];
+  const uiRate = parseFloat(document.getElementById('tl-fault-rate').value) || meta.defaultUi;
+  const duration = Math.max(1, parseInt(document.getElementById('tl-fault-duration').value, 10) || 30);
+  const backendRate = meta.toBackendRate(uiRate);
+  testLabFault(type, backendRate, duration);
+}
+
 function testLabFault(mode, rate, duration_s){
   if(!ws || ws.readyState !== 1 || !authOk){ toast('Not connected/authenticated'); return; }
   ws.send(JSON.stringify({ type: 'test_lab_fault_config', mode, rate, duration_s }));
@@ -595,17 +800,82 @@ function testLabKill(){
   ws.send(JSON.stringify({ type: 'test_lab_kill' }));
   toast('Kill switch sent — clearing all fault injection');
 }
+
 function renderTestLabStatus(fault, ids){
-  const statusEl = document.getElementById('fault-status');
-  const textEl = document.getElementById('fault-status-text');
-  if(fault && fault.active){
-    textEl.textContent = `ACTIVE — ${fault.mode} @ rate ${fault.rate}, ${fault.remaining_s}s remaining`;
-    statusEl.classList.add('active');
-  } else {
-    textEl.textContent = 'Inactive';
-    statusEl.classList.remove('active');
+  fault = fault || { active: false };
+  const active = !!fault.active;
+
+  // ── Detect real start/stop transitions for the history log ──────
+  if(active && !testLab.lastActive){
+    testLab.activeStartedAt = new Date();
+    testLab.lastKnownRemaining = fault.remaining_s;
+  } else if(!active && testLab.lastActive){
+    // Just ended — log it. "COMPLETED" if the last known remaining time
+    // was at/near zero, otherwise treat as an early stop (kill switch or
+    // a fresh reconfig cutting it short) — this is inferred from the
+    // real last-seen remaining_s, not fabricated.
+    const wasNearZero = testLab.lastKnownRemaining != null && testLab.lastKnownRemaining <= 1.5;
+    testLab.history.unshift({
+      mode: testLab.lastMode, rate: testLab.lastRate, durationS: testLab.lastDurationS,
+      startedAt: testLab.activeStartedAt, endedAt: new Date(),
+      status: wasNearZero ? 'completed' : 'stopped'
+    });
+    if(testLab.history.length > TESTLAB_HISTORY_MAX) testLab.history.pop();
+    testLab.activeStartedAt = null;
+  }
+  if(active){
+    testLab.lastMode = fault.mode;
+    testLab.lastRate = fault.rate;
+    testLab.lastDurationS = fault.duration_s != null ? fault.duration_s : testLab.lastDurationS;
+    testLab.lastKnownRemaining = fault.remaining_s;
+  }
+  testLab.lastActive = active;
+
+  // ── Main-dashboard compact widget ──
+  const widget = document.getElementById('tl-dash-widget');
+  const statusText = document.getElementById('tl-dash-status-text');
+  const detailEl = document.getElementById('tl-dash-detail');
+  if(widget && statusText && detailEl){
+    widget.classList.toggle('active', active);
+    if(active){
+      statusText.textContent = 'FAULT ACTIVE';
+      detailEl.innerHTML = `<b>${escapeHtml((fault.mode||'').toUpperCase())}</b> · rate ${escapeHtml(String(fault.rate))} · ${fault.remaining_s!=null ? fault.remaining_s.toFixed(1)+'s remaining' : ''}`;
+    } else {
+      statusText.textContent = 'INACTIVE';
+      detailEl.textContent = 'No fault currently active.';
+    }
   }
 
+  // ── Overlay: Current Experiment panel ──
+  const curPanel = document.getElementById('tl-current-panel');
+  if(curPanel){
+    if(active){
+      const pct = (fault.duration_s && fault.remaining_s!=null)
+        ? Math.max(0, Math.min(100, 100 * (1 - (fault.remaining_s / fault.duration_s))))
+        : null;
+      curPanel.innerHTML = `
+        <div class="tl-current-type">🔴 FAULT ACTIVE — ${escapeHtml((fault.mode||'').toUpperCase())}</div>
+        <div class="tl-current-path">Applied to: Bridge → Browser broadcast (:8765)</div>
+        <div class="tl-progress-track"><div class="tl-progress-fill" style="width:${pct!=null?pct:50}%"></div></div>
+        <div class="tl-progress-lbl">${fault.remaining_s!=null ? fault.remaining_s.toFixed(1)+'s remaining' : 'remaining time not reported'}</div>
+        <button class="tl-kill-btn" onclick="testLabKill()">⛔ KILL / STOP FAULT</button>
+      `;
+    } else {
+      curPanel.innerHTML = `<div class="tl-current-empty">● TEST LAB INACTIVE<br>No fault currently active.</div>`;
+    }
+  }
+
+  // ── Overlay: Live Effect (only real fields) ──
+  const liveMode = document.getElementById('tl-live-mode');
+  const liveRate = document.getElementById('tl-live-rate');
+  const liveRemaining = document.getElementById('tl-live-remaining');
+  if(liveMode) liveMode.textContent = active ? (fault.mode||'—').toUpperCase() : '—';
+  if(liveRate) liveRate.textContent = active ? String(fault.rate) : '—';
+  if(liveRemaining) liveRemaining.textContent = active && fault.remaining_s!=null ? fault.remaining_s.toFixed(1) : '—';
+
+  renderTestLabHistory();
+
+  // ── IDS status (unchanged) ──
   const idsEl = document.getElementById('ids-status');
   const entries = Object.entries(ids || {});
   if(entries.length === 0){
@@ -616,6 +886,25 @@ function renderTestLabStatus(fault, ids){
     const cls = rec.blocked ? 'ids-row-blocked' : 'ids-row-ok';
     const status = rec.blocked ? `BLOCKED (${rec.blocked_remaining_s}s left)` : `${rec.failures_in_window} failure(s) in window`;
     return `<div class="${cls}">${escapeHtml(ip)} — ${status}</div>`;
+  }).join('');
+}
+
+function renderTestLabHistory(){
+  const wrap = document.getElementById('tl-history-list');
+  if(!wrap) return;
+  if(testLab.history.length === 0){
+    wrap.innerHTML = '<div class="tl-history-empty">No experiments run yet this session.</div>';
+    return;
+  }
+  wrap.innerHTML = testLab.history.map(h => {
+    const t = h.startedAt ? h.startedAt.toLocaleTimeString('en-GB',{hour12:false}) : '—';
+    return `<div class="tl-history-item">
+      <div>
+        <div class="tl-history-main">${t} — ${escapeHtml((h.mode||'').toUpperCase())}</div>
+        <div class="tl-history-sub">rate ${escapeHtml(String(h.rate))}${h.durationS?(' · '+h.durationS+'s'):''}</div>
+      </div>
+      <div class="tl-history-status ${h.status}">${h.status === 'completed' ? '✓ COMPLETED' : '✕ STOPPED'}</div>
+    </div>`;
   }).join('');
 }
 
