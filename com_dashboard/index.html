@@ -76,6 +76,18 @@
       <div class="p-subhead">BY CATEGORY</div>
       <div id="cat-breakdown" class="cat-breakdown"></div>
     </div>
+
+    <!-- Compact Test Lab status (Other-Problems §3) — summary only;
+         full configuration/controls/history live inside the Test Lab
+         overlay, opened via "OPEN TEST LAB" here or the topbar button. -->
+    <div class="p-head">🧪 TEST LAB</div>
+    <div class="p-section">
+      <div class="tl-widget" id="tl-dash-widget">
+        <div class="tl-widget-status" id="tl-dash-status"><span class="fs-dot"></span><span id="tl-dash-status-text">INACTIVE</span></div>
+        <div class="tl-widget-detail" id="tl-dash-detail">No fault currently active.</div>
+        <button class="tl-widget-open" onclick="document.getElementById('btn-testlab-toggle').click()">OPEN TEST LAB →</button>
+      </div>
+    </div>
   </aside>
 
   <!-- CENTER: Three-card communication observability + detail views -->
@@ -92,15 +104,23 @@
           <span class="card-expand">⤢</span>
         </div>
         <div class="card-body">
-          <div class="card-latest-label">LATEST ACTIVITY</div>
+          <div class="card-latest-label">LATEST TRANSMISSION</div>
           <div class="card-latest" id="c1-latest">No activity yet</div>
           <div class="card-latest-time" id="c1-latest-time">—</div>
+          <!-- Level-2 compact pose preview — only populated for real
+               rtos_sequence/send_sequence envelopes (redesign §4/§5) -->
+          <div class="pose-preview" id="c1-pose-preview" style="display:none"></div>
+          <div class="card-mini-grid cols-3">
+            <div class="mini-stat"><div class="mini-val" id="c1-cmd-count">0</div><div class="mini-key">COMMANDS</div></div>
+            <div class="mini-stat"><div class="mini-val" id="c1-seq-count">0</div><div class="mini-key">SEQUENCES</div></div>
+            <div class="mini-stat"><div class="mini-val" id="c1-pose-count">0</div><div class="mini-key">POSES SENT</div></div>
+          </div>
           <div class="card-mini-grid">
             <div class="mini-stat"><div class="mini-val" id="c1-mode">MANUAL</div><div class="mini-key">MODE</div></div>
             <div class="mini-stat"><div class="mini-val" id="c1-count">0</div><div class="mini-key">MESSAGES</div></div>
           </div>
         </div>
-        <div class="card-foot">Click to inspect full stream →</div>
+        <div class="card-foot">Click to inspect Dashboard → Bridge transmission history →</div>
       </div>
 
       <!-- CARD 2 — Python Bridge internal processing -->
@@ -173,22 +193,33 @@
               </g>
             </g>
           </svg>
+          <!-- Vertical joint list (redesign §25) — full name + value +
+               a small movement-direction indicator per joint, never
+               clipped/cramped regardless of card width. -->
           <div class="joint-readout" id="joint-readout">
-            <div class="jr-cell"><span class="jr-lbl">J0</span><span class="jr-val" id="jr-j0">—</span></div>
-            <div class="jr-cell"><span class="jr-lbl">J1</span><span class="jr-val" id="jr-j1">—</span></div>
-            <div class="jr-cell"><span class="jr-lbl">J2</span><span class="jr-val" id="jr-j2">—</span></div>
-            <div class="jr-cell"><span class="jr-lbl">J3</span><span class="jr-val" id="jr-j3">—</span></div>
-            <div class="jr-cell"><span class="jr-lbl">J4</span><span class="jr-val" id="jr-j4">—</span></div>
-            <div class="jr-cell"><span class="jr-lbl">GRIP</span><span class="jr-val" id="jr-grip">—</span></div>
+            <div class="jr-cell"><span class="jr-tag">J0</span><span class="jr-lbl">Base Yaw</span><span class="jr-val" id="jr-j0">—</span><span class="jr-move" id="jr-move-j0"></span></div>
+            <div class="jr-cell"><span class="jr-tag">J1</span><span class="jr-lbl">Shoulder</span><span class="jr-val" id="jr-j1">—</span><span class="jr-move" id="jr-move-j1"></span></div>
+            <div class="jr-cell"><span class="jr-tag">J2</span><span class="jr-lbl">Elbow</span><span class="jr-val" id="jr-j2">—</span><span class="jr-move" id="jr-move-j2"></span></div>
+            <div class="jr-cell"><span class="jr-tag">J3</span><span class="jr-lbl">Wrist Pitch</span><span class="jr-val" id="jr-j3">—</span><span class="jr-move" id="jr-move-j3"></span></div>
+            <div class="jr-cell"><span class="jr-tag">J4</span><span class="jr-lbl">Wrist Roll</span><span class="jr-val" id="jr-j4">—</span><span class="jr-move" id="jr-move-j4"></span></div>
+            <div class="jr-cell"><span class="jr-tag">J5</span><span class="jr-lbl">Gripper</span><span class="jr-val" id="jr-grip">—</span><span class="jr-move" id="jr-move-j5"></span></div>
           </div>
+
+          <!-- QNX state block (redesign §26) — only real, derivable fields -->
+          <div class="c3-state-grid">
+            <div class="c3-state-cell"><div class="c3-state-key">MOTION</div><div class="c3-state-val" id="c3-motion">IDLE</div></div>
+            <div class="c3-state-cell"><div class="c3-state-key">POSE</div><div class="c3-state-val" id="c3-pose">—</div></div>
+            <div class="c3-state-cell"><div class="c3-state-key">CYCLE</div><div class="c3-state-val" id="c3-cycle">—</div></div>
+            <div class="c3-state-cell"><div class="c3-state-key">SAFETY</div><div class="c3-state-val ok" id="c3-safety">ARMED</div></div>
+            <div class="c3-state-cell"><div class="c3-state-key">TCP LINK</div><div class="c3-state-val" id="c3-tcp">—</div></div>
+            <div class="c3-state-cell"><div class="c3-state-key">TELEMETRY RATE</div><div class="c3-state-val" id="c3-rate">—</div></div>
+          </div>
+
           <div class="card-latest-label">LATEST EVENT</div>
           <div class="card-latest" id="c3-latest">No events yet</div>
-          <div class="card-mini-grid">
-            <div class="mini-stat"><div class="mini-val" id="c3-motion">IDLE</div><div class="mini-key">MOTION</div></div>
-            <div class="mini-stat"><div class="mini-val" id="c3-pose">—</div><div class="mini-key">POSE</div></div>
-          </div>
+          <div class="card-latest-time" id="c3-latest-time">Last telemetry: —</div>
         </div>
-        <div class="card-foot">Click to inspect full stream →</div>
+        <div class="card-foot">Click to inspect QNX telemetry &amp; event monitor →</div>
       </div>
     </div>
 
@@ -205,6 +236,7 @@
           <button id="btn-pause">⏸ PAUSE</button>
         </div>
       </div>
+      <div id="detail-subfilters" style="display:none"></div>
       <div id="packet-list"></div>
     </div>
 
@@ -230,7 +262,7 @@
 <div id="testlab-overlay" class="testlab-hidden">
   <div id="testlab-panel">
     <div class="testlab-header">
-      <div class="testlab-title">🧪 NETWORK / SECURITY TEST LAB</div>
+      <div class="testlab-title">🧪 FAULT INJECTION &amp; EXPERIMENT CONSOLE</div>
       <button id="btn-testlab-close" class="testlab-close">✕ CLOSE</button>
     </div>
     <div class="testlab-warning">
@@ -238,19 +270,83 @@
     </div>
 
     <div class="testlab-grid">
+      <!-- FAULT CONFIGURATION -->
       <div class="testlab-card">
-        <div class="testlab-card-title">FAULT INJECTION</div>
-        <div class="testlab-status" id="fault-status"><span class="fs-dot"></span><span id="fault-status-text">Inactive</span></div>
-        <div class="testlab-btns">
-          <button class="tl-btn" onclick="testLabFault('packet_loss', 0.25, 30)"><span class="tl-btn-ico">📉</span>20–25% Packet Loss <em>30s</em></button>
-          <button class="tl-btn" onclick="testLabFault('delay', 0.4, 30)"><span class="tl-btn-ico">🐢</span>~400ms Delay <em>30s</em></button>
-          <button class="tl-btn" onclick="testLabFault('corrupt', 0.3, 20)"><span class="tl-btn-ico">⚠️</span>Corrupt 30% Payloads <em>20s</em></button>
-          <button class="tl-btn tl-kill" onclick="testLabKill()"><span class="tl-btn-ico">⛔</span>KILL SWITCH — Clear All</button>
+        <div class="tl-section-title">FAULT CONFIGURATION</div>
+
+        <!-- Direction diagram: shows the ONE path the backend actually
+             supports. Not a picker — fault_layer.py only ever touches
+             the bridge→browser broadcast (see bridge.py _broadcast()),
+             never the QNX TCP link or emergency messages. -->
+        <div class="tl-direction">
+          <span class="tl-dir-node">DASHBOARD</span>
+          <span class="tl-dir-arrow">←</span>
+          <span class="tl-dir-node affected">BRIDGE (fault applied here)</span>
+          <span class="tl-dir-arrow">←</span>
+          <span class="tl-dir-node">QNX</span>
+        </div>
+
+        <div class="tl-form-row">
+          <label for="tl-fault-type">FAULT TYPE</label>
+          <select id="tl-fault-type" onchange="tlOnFaultTypeChange()">
+            <option value="packet_loss">Packet Loss</option>
+            <option value="delay">TCP-side Delay</option>
+            <option value="corrupt">Payload Corruption</option>
+          </select>
+        </div>
+
+        <div class="tl-form-inline">
+          <div class="tl-form-row">
+            <label id="tl-rate-label" for="tl-fault-rate">DROP RATE (%)</label>
+            <input type="number" id="tl-fault-rate" min="1" max="100" value="25" step="1">
+          </div>
+          <div class="tl-form-row">
+            <label for="tl-fault-duration">DURATION (sec)</label>
+            <input type="number" id="tl-fault-duration" min="1" max="300" value="30" step="1">
+          </div>
+        </div>
+
+        <button class="tl-arm-btn" onclick="tlArmFault()">⚠ ARM FAULT</button>
+      </div>
+
+      <!-- CURRENT EXPERIMENT -->
+      <div class="testlab-card">
+        <div class="tl-section-title">CURRENT EXPERIMENT</div>
+        <div class="tl-current" id="tl-current-panel">
+          <div class="tl-current-empty" id="tl-current-empty">● TEST LAB INACTIVE<br>No fault currently active.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE EFFECT — only real backend-reported fields; packet-level
+         observed/affected/passed counts are not exposed by the current
+         fault_layer.py, so they are explicitly called out as such
+         rather than fabricated. -->
+    <div class="testlab-grid" style="grid-template-columns:1fr">
+      <div class="testlab-card">
+        <div class="tl-section-title">LIVE EFFECT</div>
+        <div class="tl-live-effect-grid" id="tl-live-grid">
+          <div class="tl-live-cell"><div class="tl-live-val" id="tl-live-mode">—</div><div class="tl-live-key">MODE</div></div>
+          <div class="tl-live-cell"><div class="tl-live-val" id="tl-live-rate">—</div><div class="tl-live-key">RATE</div></div>
+          <div class="tl-live-cell"><div class="tl-live-val" id="tl-live-remaining">—</div><div class="tl-live-key">REMAINING (s)</div></div>
+        </div>
+        <div class="tl-live-note">Per-packet observed/affected/passed counters are not exposed by the current gateway (<code>fault_layer.py</code>) and are intentionally omitted rather than estimated.</div>
+      </div>
+    </div>
+
+    <div class="testlab-grid">
+      <!-- EXPERIMENT HISTORY — built client-side from real test_lab_status
+           transitions (start/stop timestamps, mode, rate, duration).
+           Bounded to the most recent entries. -->
+      <div class="testlab-card">
+        <div class="tl-section-title">EXPERIMENT HISTORY</div>
+        <div class="tl-history-list" id="tl-history-list">
+          <div class="tl-history-empty">No experiments run yet this session.</div>
         </div>
       </div>
 
       <div class="testlab-card">
-        <div class="testlab-card-title">FIREWALL / IDS STATUS</div>
+        <div class="tl-section-title">FIREWALL / IDS STATUS</div>
         <div id="ids-status" class="ids-status">No failed-auth activity recorded yet.</div>
         <div class="testlab-note">Repeated failed-token connections from the same IP (across :8765 and :8766) are logged and temporarily blocked in-memory. Generate real test traffic with <code>testing/security_test_clients.py</code> — genuine bad-auth attempts, not simulated UI events.</div>
       </div>
