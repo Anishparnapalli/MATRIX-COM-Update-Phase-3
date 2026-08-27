@@ -184,10 +184,24 @@ input[type=range]:disabled{opacity:.3;pointer-events:none}
 #mode-strip{top:10px;left:50%;transform:translateX(-50%);background:rgba(2,4,8,.8);border:1px solid var(--bg4);padding:4px 14px;font-size:13px;letter-spacing:.1em;border-radius:4px}
 #edit-strip{top:12px;right:12px;background:rgba(10,18,32,.9);border:1px solid var(--amber);padding:10px;font-size:14px;color:var(--amber);border-radius:6px;display:none;flex-direction:column;gap:8px;z-index:20;box-shadow:0 4px 15px rgba(0,0,0,0.5)}
 .edit-tools{display:flex;gap:6px;}
-#emerg-overlay{position:absolute;inset:0;background:rgba(200,0,0,.15);border:3px solid var(--red);display:none;align-items:center;justify-content:center;pointer-events:none}
+
+/* ── EMERGENCY OVERLAY (Item 6: reset control lives directly below the
+     main alert now, not in the side panel) ─────────────────────────── */
+#emerg-overlay{position:absolute;inset:0;background:rgba(200,0,0,.15);border:3px solid var(--red);display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;pointer-events:none}
 #emerg-overlay.show{display:flex}
 .emerg-text{font-family:var(--head);font-size:clamp(28px,5vw,48px);color:var(--red);letter-spacing:.15em;animation:blink .6s step-start infinite}
 @keyframes blink{50%{opacity:0}}
+
+/* The reset panel is the only interactive part of the overlay — the rest
+   stays pointer-events:none so it never blocks the 3D viewport/orbit. */
+.emerg-panel{pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(10,2,4,.92);border:2px solid var(--red);border-radius:10px;padding:20px 34px;box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 30px rgba(255,34,68,.25);animation:lockPulse 1.6s ease-in-out infinite}
+.emerg-panel-title{font-family:var(--head);font-size:16px;letter-spacing:.14em;color:#ffb3bd}
+.emerg-panel-sub{font-size:13px;color:var(--fg2);letter-spacing:.04em;text-align:center}
+.emerg-reset-btn{font-family:var(--head);font-size:14px;letter-spacing:.1em;background:var(--red2);color:#fff;border:1.5px solid var(--red);border-radius:6px;padding:11px 26px;cursor:pointer;transition:.18s;margin-top:4px}
+.emerg-reset-btn:hover{background:var(--red);box-shadow:0 0 18px rgba(255,34,68,.5)}
+.emerg-reset-btn:active{transform:scale(0.96)}
+.emerg-reset-btn:disabled{opacity:.55;cursor:wait;animation:none;background:var(--bg3);border-color:var(--fg3);color:var(--fg2)}
+@keyframes lockPulse{0%,100%{box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 20px rgba(255,34,68,.25)}50%{box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 34px rgba(255,34,68,.45)}}
 
 /* Notification toast */
 #toast{position:fixed;bottom:20px;right:20px;background:var(--bg2);border:1px solid var(--cyan);border-radius:6px;padding:10px 18px;font-size:14px;color:var(--cyan);z-index:9000;opacity:0;transform:translateY(10px);transition:.3s;pointer-events:none;max-width:320px}
@@ -209,11 +223,6 @@ input[type=range]:disabled{opacity:.3;pointer-events:none}
 
 /* Pose duration control (Phase 2) */
 .pose-dur-row{margin-bottom:8px;padding:8px;background:var(--bg3);border:1px solid var(--bg4);border-radius:4px}
-
-/* ── Safety-lock banner (Item 6) ─────────────────────────────── */
-.safety-lock-banner{display:none;align-items:center;justify-content:center;gap:8px;margin-top:8px;padding:9px 10px;background:rgba(255,34,68,.12);border:1.5px solid var(--red);border-radius:5px;font-family:var(--head);font-size:12px;letter-spacing:.06em;color:#ffb3bd;text-align:center;animation:lockPulse 1.6s ease-in-out infinite}
-@keyframes lockPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,34,68,.25)}50%{box-shadow:0 0 10px 2px rgba(255,34,68,.35)}}
-#btn-safety-action:disabled{opacity:.55;cursor:wait;animation:none}
 .pose-dur-lbl{font-size:12px;color:var(--fg2);letter-spacing:.1em;display:block;margin-bottom:6px}
 .pose-dur-inputs{display:flex;align-items:center;gap:8px}
 .pose-dur-inputs input[type=range]{flex:1}
