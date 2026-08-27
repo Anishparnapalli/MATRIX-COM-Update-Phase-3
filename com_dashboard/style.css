@@ -41,9 +41,13 @@ body{display:flex;flex-direction:column}
 
 /* ── Content grid ── */
 #content{flex:1;display:flex;overflow:hidden}
-#panel-left{width:320px;background:var(--bg1);border-right:1px solid var(--bg4);overflow-y:auto;flex-shrink:0}
-#panel-right{width:340px;background:var(--bg1);border-left:1px solid var(--bg4);overflow-y:auto;flex-shrink:0}
-#panel-center{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:16px;gap:10px}
+/* Rebalanced (redesign item 1): Topology + Packet Inspector are
+   compact-but-usable side rails; the three observability cards get the
+   width that used to go to these. viewBox-scaled SVGs and existing
+   overflow-y:auto keep everything usable at the narrower width. */
+#panel-left{width:224px;background:var(--bg1);border-right:1px solid var(--bg4);overflow-y:auto;flex-shrink:0}
+#panel-right{width:248px;background:var(--bg1);border-left:1px solid var(--bg4);overflow-y:auto;flex-shrink:0}
+#panel-center{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:16px;gap:10px;min-width:0}
 
 .p-head{font-size:var(--fs-secondary);letter-spacing:.14em;color:var(--cyan);padding:12px 14px 9px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bg3);justify-content:space-between}
 .p-head-sub{color:var(--fg3);letter-spacing:.04em;font-size:var(--fs-micro);text-transform:none}
@@ -114,9 +118,24 @@ body{display:flex;flex-direction:column}
 .card-latest{font-size:var(--fs-secondary);color:var(--fg);line-height:1.5;min-height:2.6em}
 .card-latest-time{font-size:var(--fs-micro);color:var(--fg3)}
 .card-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.card-mini-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
 .mini-stat{background:var(--bg2);border:1px solid var(--bg4);border-radius:5px;padding:8px;text-align:center}
 .mini-val{font-family:var(--head);font-size:14px;color:var(--cyan)}
 .mini-key{font-size:10px;color:var(--fg2);letter-spacing:.08em;margin-top:3px}
+
+/* ── Card 1: level-2 pose preview strip (redesign §4) ────────────── */
+.pose-preview{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.pose-preview::-webkit-scrollbar{height:4px}
+.pose-chip{flex-shrink:0;background:var(--bg2);border:1px solid var(--bg4);border-radius:5px;padding:5px 8px;text-align:center;min-width:52px}
+.pose-chip-lbl{font-size:9px;color:var(--fg3);letter-spacing:.06em;display:block}
+.pose-chip-val{font-size:11px;color:var(--cyan);font-family:var(--head);display:block;margin-top:2px}
+.pose-preview-empty{font-size:var(--fs-micro);color:var(--fg3);padding:6px 0}
+
+/* ── Card 1 detail view: filter tabs ─────────────────────────────── */
+.c1-filter-row{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 8px}
+.c1-filter-btn{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg2);font-family:var(--mono);font-size:var(--fs-micro);padding:4px 10px;border-radius:12px;cursor:pointer;transition:.15s}
+.c1-filter-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.c1-filter-btn.active{background:var(--blue2);border-color:var(--blue);color:#fff}
 
 /* ── Card 2: gateway pipeline ── */
 .pipeline-svg{width:100%;height:auto;flex-shrink:0}
@@ -135,11 +154,31 @@ body{display:flex;flex-direction:column}
 .arm-link{stroke:var(--cyan);stroke-width:4;stroke-linecap:round}
 .arm-joint{fill:var(--bg2);stroke:var(--blue);stroke-width:2}
 .arm-joint.arm-end{fill:var(--amber);stroke:var(--amber)}
-.joint-readout{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
-.jr-cell{background:var(--bg2);border:1px solid var(--bg4);border-radius:4px;padding:4px 2px;text-align:center}
-.jr-lbl{display:block;font-size:9px;color:var(--fg3);letter-spacing:.06em}
-.jr-val{display:block;font-family:var(--head);font-size:12px;color:var(--fg);margin-top:2px}
+/* Vertical joint list (redesign §25) — full names, values and a small
+   movement indicator per row, never cramped into a single grid line. */
+.joint-readout{display:flex;flex-direction:column;gap:3px}
+.jr-cell{background:var(--bg2);border:1px solid var(--bg4);border-radius:4px;padding:4px 8px;display:flex;align-items:center;gap:8px}
+.jr-tag{font-size:10px;font-family:var(--head);color:var(--fg3);min-width:20px}
+.jr-lbl{flex:1;font-size:11px;color:var(--fg2);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jr-val{font-family:var(--head);font-size:12px;color:var(--fg);min-width:52px;text-align:right}
 .jr-val.live{color:var(--cyan)}
+.jr-move{width:14px;text-align:center;font-size:11px;color:var(--fg3);flex-shrink:0}
+.jr-move.up{color:var(--green)}
+.jr-move.down{color:var(--amber)}
+
+/* ── Card 3: QNX state block (redesign §26) ──────────────────────── */
+.c3-state-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.c3-state-cell{background:var(--bg2);border:1px solid var(--bg4);border-radius:5px;padding:6px 8px}
+.c3-state-key{font-size:9px;color:var(--fg3);letter-spacing:.06em}
+.c3-state-val{font-size:12px;color:var(--fg);font-family:var(--head);margin-top:2px}
+.c3-state-val.warn{color:var(--amber)}
+.c3-state-val.ok{color:var(--green)}
+.c3-state-val.bad{color:var(--red)}
+
+/* ── Card 3 detail view: filter tabs + grouped telemetry ─────────── */
+.c3-filter-row{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 8px}
+.c3-event-highlight{border-left:3px solid var(--amber) !important;background:rgba(255,170,0,.06) !important}
+.c3-group-row{color:var(--fg3);font-style:italic}
 
 /* ═══════════════════════════════════════════ DETAIL VIEW ═══ */
 .detail-view{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg1);border:1px solid var(--bg4);border-radius:10px;overflow:hidden}
@@ -226,6 +265,72 @@ body{display:flex;flex-direction:column}
 .ids-row-blocked{color:var(--red)}
 .ids-row-ok{color:var(--fg2)}
 .testlab-note{font-size:var(--fs-micro);color:var(--fg3);line-height:1.6}
+
+/* ═══════════════════════════════════════════ TEST LAB STATUS WIDGET
+   (redesign §3) — compact summary on the main Communication Dashboard.
+   Full config/controls/history remain only inside the Test Lab overlay. */
+.tl-widget{background:var(--bg2);border:1px solid var(--bg4);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.tl-widget.active{border-color:var(--red2);background:rgba(255,34,68,.06)}
+.tl-widget-head{display:flex;align-items:center;gap:8px;font-family:var(--head);font-size:var(--fs-secondary);color:var(--fg)}
+.tl-widget-status{display:flex;align-items:center;gap:7px;font-size:var(--fs-secondary)}
+.tl-widget-status .fs-dot{background:var(--fg3)}
+.tl-widget.active .tl-widget-status .fs-dot{background:var(--red);animation:activityPulse 1s ease-in-out infinite}
+.tl-widget-status.armed .fs-dot{background:var(--amber) !important;animation:activityPulse 1s ease-in-out infinite}
+.tl-widget-detail{font-size:var(--fs-micro);color:var(--fg2);line-height:1.6}
+.tl-widget-detail b{color:var(--fg)}
+.tl-widget-open{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg2);font-family:var(--mono);font-size:var(--fs-micro);padding:6px 10px;border-radius:4px;cursor:pointer;transition:.15s;text-align:center}
+.tl-widget-open:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* ═══════════════════════════════════════════ TEST LAB REDESIGN (Other-Problems §2) ═══ */
+.tl-section-title{font-family:var(--head);font-size:11px;letter-spacing:.12em;color:var(--fg2);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.tl-section-title::after{content:'';flex:1;height:1px;background:var(--bg4)}
+
+/* Fault configuration form */
+.tl-form-row{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.tl-form-row label{font-size:var(--fs-micro);color:var(--fg3);letter-spacing:.06em}
+.tl-form-row select,.tl-form-row input[type=number]{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);font-family:var(--mono);font-size:var(--fs-secondary);padding:7px 9px;border-radius:5px;outline:none}
+.tl-form-row select:focus,.tl-form-row input:focus{border-color:var(--cyan)}
+.tl-form-inline{display:flex;gap:10px}
+.tl-form-inline .tl-form-row{flex:1}
+.tl-arm-btn{width:100%;font-family:var(--head);background:var(--red2);color:#fff;border:1px solid var(--red);padding:10px;border-radius:6px;cursor:pointer;letter-spacing:.08em;font-size:var(--fs-secondary);transition:.18s;margin-top:4px}
+.tl-arm-btn:hover{background:var(--red)}
+.tl-arm-btn:active{transform:scale(.97)}
+
+/* Direction diagram — only shows the ONE path fault_layer.py actually
+   supports (bridge→browser broadcast); never a picker for unsupported
+   directions (see redesign notes / IMPLEMENTATION_PLAN.md item B10). */
+.tl-direction{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg3);border:1px solid var(--bg4);border-radius:6px;padding:10px;margin-bottom:12px;font-size:var(--fs-secondary)}
+.tl-direction .tl-dir-node{padding:4px 10px;border-radius:4px;background:var(--bg2);border:1px solid var(--bg4);color:var(--fg2)}
+.tl-direction .tl-dir-node.affected{color:var(--red);border-color:var(--red2)}
+.tl-direction .tl-dir-arrow{color:var(--fg3)}
+
+/* Current experiment card */
+.tl-current{display:flex;flex-direction:column;gap:10px}
+.tl-current-empty{color:var(--fg3);font-size:var(--fs-secondary);text-align:center;padding:20px 0}
+.tl-current-type{font-family:var(--head);font-size:15px;color:var(--fg)}
+.tl-current-path{font-size:var(--fs-micro);color:var(--fg2)}
+.tl-progress-track{width:100%;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;border:1px solid var(--bg4)}
+.tl-progress-fill{height:100%;background:linear-gradient(90deg,var(--amber2),var(--amber));transition:width .3s linear}
+.tl-progress-lbl{font-size:var(--fs-micro);color:var(--fg2);text-align:right}
+.tl-kill-btn{background:var(--bg3);border:1.5px solid var(--red2);color:var(--red);font-family:var(--head);font-size:var(--fs-secondary);padding:9px;border-radius:6px;cursor:pointer;transition:.15s;letter-spacing:.06em}
+.tl-kill-btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* Live effect */
+.tl-live-effect-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.tl-live-cell{background:var(--bg3);border:1px solid var(--bg4);border-radius:5px;padding:8px;text-align:center}
+.tl-live-val{font-family:var(--head);font-size:16px;color:var(--cyan)}
+.tl-live-key{font-size:9px;color:var(--fg2);letter-spacing:.06em;margin-top:3px}
+.tl-live-note{font-size:var(--fs-micro);color:var(--fg3);line-height:1.6;font-style:italic}
+
+/* Experiment history */
+.tl-history-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto}
+.tl-history-empty{color:var(--fg3);font-size:var(--fs-secondary);text-align:center;padding:14px 0}
+.tl-history-item{display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--bg4);border-radius:5px;padding:7px 10px;font-size:var(--fs-micro)}
+.tl-history-main{color:var(--fg)}
+.tl-history-sub{color:var(--fg3);margin-top:2px}
+.tl-history-status{font-family:var(--head);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:3px}
+.tl-history-status.completed{background:#0a2a12;color:var(--green)}
+.tl-history-status.stopped{background:#2a1800;color:var(--amber)}
 
 /* ── Responsive fallback for narrow viewports ── */
 @media (max-width:1100px){
