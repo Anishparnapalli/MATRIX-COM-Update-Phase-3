@@ -311,14 +311,7 @@
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn danger" id="btn-emerg" onclick="triggerEmergency()">🛑 EMERGENCY</button>
-          <button class="btn success" id="btn-safety-action" onclick="handleEmergencyClearClick()">✔ CLEAR</button>
-        </div>
-        <!-- Item 6: safety-lock banner — shown whenever S.emergency is
-             true. For QNX-involved stops this requires an explicit,
-             QNX-confirmed reset before motion is allowed again. -->
-        <div class="safety-lock-banner" id="safety-lock-banner" style="display:none">
-          <span id="safety-lock-status">🔒 SAFETY LOCKED</span>
+          <button class="btn danger" id="btn-emerg" onclick="triggerEmergency()" style="flex:1">🛑 EMERGENCY STOP</button>
         </div>
         <div class="btn-row" style="margin-top:5px">
           <button class="btn warn" id="btn-load" onclick="toggleLoad()">⚙ ADD LOAD</button>
@@ -361,7 +354,14 @@
       <div class="canvas-overlay" id="angle-strip">J0:+0.0° J1:+0.0° J2:+0.0° J3:+0.0° J4:+0.0°</div>
       <div class="canvas-overlay" id="edit-strip">✏ EDIT MODE — Drag parts to reposition</div>
       <div id="axis-angle-overlay"></div>
-      <div id="emerg-overlay"><div class="emerg-text">⚠ EMERGENCY STOP ⚠</div></div>
+      <div id="emerg-overlay">
+        <div class="emerg-text">⚠ EMERGENCY STOP ⚠</div>
+        <div class="emerg-panel" id="emerg-safety-panel">
+          <div class="emerg-panel-title">SAFETY SYSTEM LOCKED</div>
+          <div class="emerg-panel-sub" id="safety-lock-status">QNX reset required</div>
+          <button class="emerg-reset-btn" id="btn-safety-action" onclick="handleEmergencyClearClick()">🔓 RESET EMERGENCY</button>
+        </div>
+      </div>
       <div class="canvas-overlay" style="bottom:10px; left:10px; pointer-events:auto; display:flex; gap:10px; z-index:10;">
         <button class="btn" style="background:var(--bg2); border-color:var(--cyan); color:var(--cyan); font-family:var(--head); padding:8px 16px; font-size:11px;" onclick="S.targets=[0,0,0,0,0,0];">RESET (0°)</button>
         <button class="btn" style="background:var(--bg2); border-color:var(--green); color:var(--green); font-family:var(--head); padding:8px 16px; font-size:11px;" onclick="S.targets=[90,90,90,90,90,0];">HOME (90°)</button>
@@ -434,3 +434,4 @@
 
 <script src="app.js"></script>
 </body>
+</html>
