@@ -1,6 +1,6 @@
 "use strict";
 /* ═══════════════════════════════════════════════════════════════════
- *  M.A.T.R.I.X. Communication Website — app.js  (Phase 2, three-card)
+ *  M.A.T.R.I.X. Communication Website — app.js  (Phase 2, three-card) HELLO THERE
  * ═══════════════════════════════════════════════════════════════════
  *
  *  OBSERVABILITY_TOKEN — same shared-secret model as the robotic
